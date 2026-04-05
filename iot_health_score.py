@@ -1,12 +1,14 @@
 """
-Health Monitoring & Predictive Maintenance Logic
-Converts anomaly scores into actionable health metrics and detects specific fault patterns.
+Health Monitoring & Predictive Maintenance Logic (Multi-Sensor)
+Converts anomaly scores into actionable health metrics with sensor fusion.
 
-Engineering Notes:
-- Health score (0-100): actionable metric for maintenance scheduling
-- Exponential moving average: weights recent behavior more heavily
-- Fault pattern detection: identifies specific degradation modes
-- Alert system: triggers based on health trends, not single anomalies
+Supports 6-feature multi-sensor array with fault types:
+  - Environmental: drift, noise, freeze
+  - Cross-validation: sensor divergence (DHT11 vs thermistor)
+  - Safety: fire hazard (flame sensor)
+  - Acoustic: sound anomaly
+  - Optical: light anomaly
+  - Communication: data gaps
 """
 
 import numpy as np
@@ -15,39 +17,38 @@ from typing import Dict, List, Tuple, Optional
 from enum import Enum
 
 class FaultType(Enum):
-    """Enumeration of detectable sensor faults."""
-    HEALTHY = "Healthy"
-    DRIFT = "Sensor Drift"
-    NOISE = "Excessive Noise"
-    FREEZE = "Stuck/Frozen"
-    COMMS_FAILURE = "Communication Failure"
-    GENERAL_ANOMALY = "General Anomaly"
+    """Enumeration of detectable sensor/equipment faults."""
+    HEALTHY           = "Healthy"
+    DRIFT             = "Sensor Drift"
+    NOISE             = "Excessive Noise"
+    FREEZE            = "Stuck/Frozen"
+    COMMS_FAILURE     = "Communication Failure"
+    GENERAL_ANOMALY   = "General Anomaly"
+    SENSOR_DIVERGENCE = "Sensor Divergence"
+    FIRE_HAZARD       = "Fire Hazard"
+    ACOUSTIC_ANOMALY  = "Acoustic Anomaly"
+    LIGHT_ANOMALY     = "Light Anomaly"
 
 class AlertLevel(Enum):
     """Alert severity levels."""
-    NORMAL = "Normal"
-    WARNING = "Warning"
+    NORMAL   = "Normal"
+    WARNING  = "Warning"
     CRITICAL = "Critical"
 
 class SensorHealthMonitor:
     """
-    Converts anomaly scores into health metrics and detects fault patterns.
+    Multi-sensor health monitor with sensor fusion.
+    Converts reconstruction errors into health metrics and detects
+    specific fault patterns across all sensor modalities.
     """
     
     def __init__(
         self,
-        ema_alpha: float = 0.05,  # Smoothing factor (lower = more smoothing)
-        drift_window: int = 50,    # Window for drift detection
-        noise_window: int = 20,    # Window for noise detection
-        freeze_threshold: int = 5  # Consecutive identical readings = freeze
+        ema_alpha: float = 0.05,
+        drift_window: int = 50,
+        noise_window: int = 20,
+        freeze_threshold: int = 5
     ):
-        """
-        Args:
-            ema_alpha: EMA smoothing factor (0-1). Lower = more history weight
-            drift_window: Rolling window size for drift detection
-            noise_window: Rolling window size for noise detection
-            freeze_threshold: Min consecutive identical values to flag freeze
-        """
         self.ema_alpha = ema_alpha
         self.drift_window = drift_window
         self.noise_window = noise_window
@@ -62,79 +63,50 @@ class SensorHealthMonitor:
         self,
         anomaly_scores: np.ndarray,
         threshold: float,
-        smooth: bool = True
+        smooth: bool = True,
+        initial_health: float = None
     ) -> np.ndarray:
         """
         Convert reconstruction errors to health scores (0-100).
         
-        Mapping logic:
-        - Error <= threshold → Health = 100
-        - Error = 2*threshold → Health = 50
-        - Error >= 4*threshold → Health = 0
-        
-        Uses exponential decay to map errors to health scores.
-        
-        Args:
-            anomaly_scores: Array of reconstruction errors
-            threshold: Anomaly detection threshold
-            smooth: Apply exponential moving average
-        
-        Returns:
-            Array of health scores (0-100)
+        Pass `initial_health` (the last health score from the previous call) to
+        continue the EMA from where it left off.  Without it the smoother restarts
+        from health[0] every tick, causing visible jumps on every buffer trim.
         """
-        # Normalize errors relative to threshold
-        normalized_errors = anomaly_scores / threshold
-        
-        # Map to health score using exponential decay
-        # Health = 100 * exp(-k * normalized_error)
-        # Choose k such that error=2*threshold gives health=50
-        # 50 = 100 * exp(-k * 2) → k = -ln(0.5)/2 ≈ 0.347
+        normalized_errors = anomaly_scores / (threshold + 1e-10)
         k = 0.347
         health = 100 * np.exp(-k * normalized_errors)
         health = np.clip(health, 0, 100)
         
         if smooth:
-            # Apply exponential moving average
             health_smooth = np.zeros_like(health)
-            health_smooth[0] = health[0]
-            
+            # Continue from last known state instead of restarting cold.
+            health_smooth[0] = initial_health if initial_health is not None else health[0]
             for i in range(1, len(health)):
                 health_smooth[i] = (self.ema_alpha * health[i] + 
                                    (1 - self.ema_alpha) * health_smooth[i-1])
-            
             return health_smooth
         
         return health
     
+    # ------------------------------------------------------------------
+    # PATTERN DETECTORS
+    # ------------------------------------------------------------------
+    
     def detect_drift(
         self,
         df: pd.DataFrame,
-        feature: str = 'temperature'
+        feature: str = 'temp_dht'
     ) -> Tuple[bool, float]:
-        """
-        Detect gradual drift in sensor readings.
-        
-        Method: Linear regression on rolling window. Significant positive/negative
-        slope indicates drift.
-        
-        Returns:
-            (is_drifting, drift_rate)
-        """
-        if len(df) < self.drift_window:
+        """Detect gradual drift in sensor readings using linear regression."""
+        if feature not in df.columns or len(df) < self.drift_window:
             return False, 0.0
         
-        # Use most recent window
         window = df[feature].iloc[-self.drift_window:].values
         x = np.arange(len(window))
-        
-        # Linear regression
         slope, _ = np.polyfit(x, window, 1)
-        
-        # Normalize slope by value range to get rate
         value_range = window.max() - window.min()
-        drift_rate = slope / (value_range + 1e-6)  # Avoid division by zero
-        
-        # Threshold: drift if rate > 1% per reading
+        drift_rate = slope / (value_range + 1e-6)
         is_drifting = abs(drift_rate) > 0.01
         
         return is_drifting, drift_rate
@@ -142,25 +114,16 @@ class SensorHealthMonitor:
     def detect_noise(
         self,
         df: pd.DataFrame,
-        feature: str = 'temperature',
+        feature: str = 'temp_dht',
         baseline_std: float = None
     ) -> Tuple[bool, float]:
-        """
-        Detect increased noise in sensor readings.
-        
-        Method: Compare rolling standard deviation to baseline.
-        
-        Returns:
-            (is_noisy, current_noise_level)
-        """
-        if len(df) < self.noise_window:
+        """Detect increased noise by comparing rolling std to baseline."""
+        if feature not in df.columns or len(df) < self.noise_window:
             return False, 0.0
         
-        # Use most recent window
         window = df[feature].iloc[-self.noise_window:].values
         current_std = np.std(window)
         
-        # If no baseline provided, use first window as baseline
         if baseline_std is None:
             if len(df) >= 2 * self.noise_window:
                 baseline_window = df[feature].iloc[:self.noise_window].values
@@ -168,7 +131,6 @@ class SensorHealthMonitor:
             else:
                 return False, current_std
         
-        # Threshold: noise increased by >50%
         noise_ratio = current_std / (baseline_std + 1e-6)
         is_noisy = noise_ratio > 1.5
         
@@ -177,23 +139,15 @@ class SensorHealthMonitor:
     def detect_freeze(
         self,
         df: pd.DataFrame,
-        feature: str = 'temperature'
+        feature: str = 'temp_dht'
     ) -> Tuple[bool, int]:
-        """
-        Detect stuck/frozen sensor (consecutive identical readings).
-        
-        Returns:
-            (is_frozen, consecutive_count)
-        """
-        if len(df) < self.freeze_threshold:
+        """Detect stuck/frozen sensor (consecutive identical readings)."""
+        if feature not in df.columns or len(df) < self.freeze_threshold:
             return False, 0
         
-        # Check most recent readings
         recent = df[feature].iloc[-self.freeze_threshold:].values
         
-        # Count consecutive identical values
         if len(np.unique(recent)) == 1:
-            # All values identical - check how many
             full_data = df[feature].values
             consecutive = 1
             for i in range(len(full_data) - 2, -1, -1):
@@ -201,7 +155,6 @@ class SensorHealthMonitor:
                     consecutive += 1
                 else:
                     break
-            
             return True, consecutive
         
         return False, 0
@@ -211,68 +164,231 @@ class SensorHealthMonitor:
         df: pd.DataFrame,
         max_gap_seconds: int = 5
     ) -> Tuple[bool, int]:
-        """
-        Detect communication failures (large time gaps).
-        
-        Returns:
-            (has_failure, num_gaps)
-        """
+        """Detect communication failures (large time gaps)."""
         if 'timestamp' not in df.columns or len(df) < 2:
             return False, 0
         
         time_diffs = df['timestamp'].diff().dt.total_seconds()
         gaps = time_diffs[time_diffs > max_gap_seconds]
+        return len(gaps) > 0, len(gaps)
+    
+    # ------------------------------------------------------------------
+    # MULTI-SENSOR SPECIFIC DETECTORS
+    # ------------------------------------------------------------------
+    
+    def detect_sensor_divergence(
+        self,
+        df: pd.DataFrame,
+        max_diff: float = 5.0
+    ) -> Tuple[bool, float]:
+        """
+        Detect divergence between DHT11 and thermistor temperatures.
+        If both sensors measure the same environment but disagree,
+        one sensor is degrading — this is sensor health monitoring.
+        """
+        if 'temp_dht' not in df.columns or 'temp_therm' not in df.columns:
+            return False, 0.0
+        if len(df) < 5:
+            return False, 0.0
         
-        has_failure = len(gaps) > 0
+        # Use recent window for robustness
+        recent = df.tail(min(10, len(df)))
+        temp_diff = abs(recent['temp_dht'] - recent['temp_therm']).mean()
+        is_diverging = temp_diff > max_diff
         
-        return has_failure, len(gaps)
+        return is_diverging, temp_diff
+    
+    def detect_fire_hazard(
+        self,
+        df: pd.DataFrame,
+        flame_threshold: float = 500.0
+    ) -> Tuple[bool, float]:
+        """
+        Detect fire hazard from flame sensor.
+        Higher flame_intensity = more IR detected = potential fire.
+        """
+        if 'flame_intensity' not in df.columns or len(df) < 3:
+            return False, 0.0
+        
+        # Check if recent readings show sustained high flame
+        recent = df['flame_intensity'].tail(min(5, len(df)))
+        avg_flame = recent.mean()
+        is_fire = avg_flame > flame_threshold
+        
+        return is_fire, avg_flame
+    
+    def detect_acoustic_anomaly(
+        self,
+        df: pd.DataFrame
+    ) -> Tuple[bool, float]:
+        """
+        Detect unusual sound patterns.
+        Sudden sound level changes indicate equipment faults
+        (bearing wear, loose parts, unusual operation).
+        """
+        if 'sound_level' not in df.columns or len(df) < self.noise_window:
+            return False, 0.0
+        
+        window = df['sound_level'].iloc[-self.noise_window:].values
+        current_std = np.std(window)
+        current_mean = np.mean(window)
+        
+        # Compare to baseline
+        if len(df) >= 2 * self.noise_window:
+            baseline = df['sound_level'].iloc[:self.noise_window].values
+            baseline_mean = np.mean(baseline)
+            baseline_std = np.std(baseline)
+            
+            # Anomaly if mean shifted significantly or variance exploded
+            mean_shift = abs(current_mean - baseline_mean) / (baseline_std + 1e-6)
+            variance_ratio = current_std / (baseline_std + 1e-6)
+            
+            is_anomalous = mean_shift > 3.0 or variance_ratio > 2.5
+            return is_anomalous, mean_shift
+        
+        return False, 0.0
+    
+    def detect_light_anomaly(
+        self,
+        df: pd.DataFrame
+    ) -> Tuple[bool, float]:
+        """
+        Detect unexpected light pattern changes.
+        Sudden changes in light level may indicate equipment
+        state changes, sparking, or environmental issues.
+        """
+        if 'light_level' not in df.columns or len(df) < self.noise_window:
+            return False, 0.0
+        
+        window = df['light_level'].iloc[-self.noise_window:].values
+        current_mean = np.mean(window)
+        
+        if len(df) >= 2 * self.noise_window:
+            baseline = df['light_level'].iloc[:self.noise_window].values
+            baseline_mean = np.mean(baseline)
+            baseline_std = np.std(baseline)
+            
+            change_ratio = abs(current_mean - baseline_mean) / (baseline_std + 1e-6)
+            is_anomalous = change_ratio > 3.0
+            return is_anomalous, change_ratio
+        
+        return False, 0.0
+    
+    # ------------------------------------------------------------------
+    # FAULT CLASSIFICATION (Multi-Sensor)
+    # ------------------------------------------------------------------
     
     def classify_fault(
         self,
         df: pd.DataFrame,
         anomaly_score: float,
         threshold: float,
-        feature: str = 'temperature'
+        feature: str = 'temp_dht'
     ) -> FaultType:
         """
-        Classify the type of fault based on multiple indicators.
+        Classify fault type using all available sensor modalities.
         
-        Priority order:
-        1. Communication failure (missing data)
-        2. Freeze (stuck sensor)
-        3. Drift (gradual deviation)
-        4. Noise (increased variance)
-        5. General anomaly (high reconstruction error)
-        6. Healthy
+        Priority order (safety first):
+        1. Fire hazard (flame sensor — immediate danger)
+        2. Communication failure (missing data)
+        3. Sensor divergence (DHT11 vs thermistor mismatch)
+        4. Freeze (stuck sensor)
+        5. Acoustic anomaly (unusual sound pattern)
+        6. Light anomaly (unusual light pattern)
+        7. Drift (gradual deviation)
+        8. Noise (increased variance)
+        9. General anomaly (high reconstruction error)
+        10. Healthy
         """
-        # Check communication
+        # 1. Fire hazard — highest priority (safety)
+        is_fire, _ = self.detect_fire_hazard(df)
+        if is_fire:
+            return FaultType.FIRE_HAZARD
+        
+        # 2. Communication failure
         comms_fail, _ = self.detect_communication_failure(df)
         if comms_fail:
             return FaultType.COMMS_FAILURE
         
-        # Check freeze
+        # 3. Sensor divergence (cross-validation)
+        is_diverging, _ = self.detect_sensor_divergence(df)
+        if is_diverging:
+            return FaultType.SENSOR_DIVERGENCE
+        
+        # 4. Freeze
         is_frozen, _ = self.detect_freeze(df, feature)
         if is_frozen:
             return FaultType.FREEZE
         
-        # Only check drift/noise if we have enough data
+        # 5. Acoustic anomaly
+        is_acoustic, _ = self.detect_acoustic_anomaly(df)
+        if is_acoustic:
+            return FaultType.ACOUSTIC_ANOMALY
+        
+        # 6. Light anomaly
+        is_light, _ = self.detect_light_anomaly(df)
+        if is_light:
+            return FaultType.LIGHT_ANOMALY
+        
+        # 7-8. Drift and noise (need enough data)
         if len(df) >= self.drift_window:
-            # Check drift
             is_drifting, _ = self.detect_drift(df, feature)
             if is_drifting:
                 return FaultType.DRIFT
         
         if len(df) >= self.noise_window:
-            # Check noise
             is_noisy, _ = self.detect_noise(df, feature)
             if is_noisy:
                 return FaultType.NOISE
         
-        # Check general anomaly
+        # 9. General anomaly
         if anomaly_score > threshold:
             return FaultType.GENERAL_ANOMALY
         
         return FaultType.HEALTHY
+    
+    # ------------------------------------------------------------------
+    # SENSOR FUSION HEALTH SCORE
+    # ------------------------------------------------------------------
+    
+    def compute_per_sensor_health(
+        self,
+        per_feature_errors: Dict[str, float],
+        threshold: float,
+        sensor_weights: Dict[str, float] = None
+    ) -> Tuple[float, Dict[str, float]]:
+        """
+        Compute weighted composite health score from per-sensor errors.
+        
+        Returns:
+            composite_health: weighted average health score (0-100)
+            per_sensor_health: dict of individual sensor health scores
+        """
+        if sensor_weights is None:
+            # Equal weights if not specified
+            sensor_weights = {k: 1.0/len(per_feature_errors) for k in per_feature_errors}
+        
+        per_sensor_health = {}
+        weighted_sum = 0.0
+        total_weight = 0.0
+        
+        for feature, error in per_feature_errors.items():
+            k = 0.347
+            normalized = error / (threshold + 1e-10)
+            health = 100 * np.exp(-k * normalized)
+            health = max(0, min(100, health))
+            per_sensor_health[feature] = health
+            
+            weight = sensor_weights.get(feature, 1.0 / len(per_feature_errors))
+            weighted_sum += health * weight
+            total_weight += weight
+        
+        composite_health = weighted_sum / (total_weight + 1e-10)
+        return composite_health, per_sensor_health
+    
+    # ------------------------------------------------------------------
+    # ALERT LEVELS & RECOMMENDATIONS
+    # ------------------------------------------------------------------
     
     def determine_alert_level(
         self,
@@ -280,15 +396,12 @@ class SensorHealthMonitor:
         fault_type: FaultType
     ) -> AlertLevel:
         """
-        Determine alert severity based on health score and fault type.
-        
-        Thresholds:
-        - Health > 80: Normal
-        - Health 50-80: Warning
-        - Health < 50: Critical
-        
-        Exception: Communication failure always critical
+        Determine alert severity based on health and fault type.
+        Fire hazard is always critical regardless of health score.
         """
+        # Safety-critical faults are always critical
+        if fault_type == FaultType.FIRE_HAZARD:
+            return AlertLevel.CRITICAL
         if fault_type == FaultType.COMMS_FAILURE:
             return AlertLevel.CRITICAL
         
@@ -299,6 +412,45 @@ class SensorHealthMonitor:
         else:
             return AlertLevel.CRITICAL
     
+    def get_maintenance_recommendation(
+        self,
+        current_health: float,
+        fault_type: FaultType,
+        alert_level: AlertLevel
+    ) -> str:
+        """Generate human-readable maintenance recommendation."""
+        
+        recommendations = {
+            FaultType.FIRE_HAZARD: 
+                "🔥 CRITICAL: Fire/overheating detected — shut down equipment immediately!",
+            FaultType.COMMS_FAILURE: 
+                "📡 CRITICAL: Check sensor wiring and power supply immediately",
+            FaultType.SENSOR_DIVERGENCE: 
+                f"⚠️ WARNING: DHT11 and thermistor readings diverging — sensor calibration needed (health: {current_health:.0f}%)",
+            FaultType.FREEZE: 
+                "❄️ CRITICAL: Sensor frozen — replace sensor unit",
+            FaultType.ACOUSTIC_ANOMALY: 
+                f"🔊 WARNING: Unusual sound pattern detected — inspect equipment for mechanical issues (health: {current_health:.0f}%)",
+            FaultType.LIGHT_ANOMALY: 
+                f"💡 WARNING: Unexpected light level change — check equipment state (health: {current_health:.0f}%)",
+            FaultType.DRIFT: 
+                f"📈 WARNING: Sensor drifting — schedule recalibration (health: {current_health:.0f}%)",
+            FaultType.NOISE: 
+                f"📊 WARNING: Increased noise — check for electromagnetic interference (health: {current_health:.0f}%)",
+            FaultType.GENERAL_ANOMALY: 
+                f"⚠️ WARNING: Anomalous multi-sensor pattern detected — monitor closely (health: {current_health:.0f}%)",
+        }
+        
+        if fault_type in recommendations:
+            return recommendations[fault_type]
+        
+        if alert_level == AlertLevel.CRITICAL:
+            return f"🚨 CRITICAL: Sensor health {current_health:.0f}% — immediate attention required"
+        elif alert_level == AlertLevel.WARNING:
+            return f"⚠️ WARNING: Sensor degradation detected (health: {current_health:.0f}%)"
+        else:
+            return f"✅ NORMAL: All sensors operating within spec (health: {current_health:.0f}%)"
+    
     def process_batch(
         self,
         df: pd.DataFrame,
@@ -306,15 +458,7 @@ class SensorHealthMonitor:
         threshold: float
     ) -> pd.DataFrame:
         """
-        Process batch of sensor data and generate health report.
-        
-        Args:
-            df: DataFrame with sensor readings and timestamps
-            anomaly_scores: Array of reconstruction errors (one per row)
-            threshold: Anomaly detection threshold
-        
-        Returns:
-            DataFrame with added columns: health_score, fault_type, alert_level
+        Process batch of multi-sensor data and generate health report.
         """
         df = df.copy()
         
@@ -328,14 +472,13 @@ class SensorHealthMonitor:
         alert_levels = []
         
         for i in range(len(df)):
-            # Use data up to current timestep for pattern detection
             df_window = df.iloc[:i+1]
             
             fault = self.classify_fault(
                 df_window,
                 anomaly_scores[i],
                 threshold,
-                feature='temperature'
+                feature='temp_dht'
             )
             
             alert = self.determine_alert_level(
@@ -356,38 +499,8 @@ class SensorHealthMonitor:
         
         return df
     
-    def get_maintenance_recommendation(
-        self,
-        current_health: float,
-        fault_type: FaultType,
-        alert_level: AlertLevel
-    ) -> str:
-        """
-        Generate human-readable maintenance recommendation.
-        """
-        if alert_level == AlertLevel.CRITICAL:
-            if fault_type == FaultType.COMMS_FAILURE:
-                return "CRITICAL: Check sensor wiring and power supply immediately"
-            elif fault_type == FaultType.FREEZE:
-                return "CRITICAL: Sensor frozen - replace sensor unit"
-            else:
-                return f"CRITICAL: Sensor health {current_health:.0f}% - immediate replacement recommended"
-        
-        elif alert_level == AlertLevel.WARNING:
-            if fault_type == FaultType.DRIFT:
-                return f"WARNING: Sensor drifting - schedule recalibration (health: {current_health:.0f}%)"
-            elif fault_type == FaultType.NOISE:
-                return f"WARNING: Increased noise - check for electromagnetic interference (health: {current_health:.0f}%)"
-            else:
-                return f"WARNING: Sensor degradation detected - monitor closely (health: {current_health:.0f}%)"
-        
-        else:
-            return f"NORMAL: Sensor operating within spec (health: {current_health:.0f}%)"
-    
     def generate_report(self, df: pd.DataFrame) -> Dict:
-        """
-        Generate summary report of sensor health status.
-        """
+        """Generate summary report of sensor health status."""
         if len(df) == 0:
             return {"error": "No data to analyze"}
         
@@ -395,10 +508,8 @@ class SensorHealthMonitor:
         current_fault = df['fault_type'].iloc[-1]
         current_alert = df['alert_level'].iloc[-1]
         
-        # Count fault occurrences
         fault_counts = df['fault_type'].value_counts().to_dict()
         
-        # Calculate uptime
         total_readings = len(df)
         healthy_readings = (df['fault_type'] == FaultType.HEALTHY.value).sum()
         uptime_percent = (healthy_readings / total_readings) * 100
@@ -422,39 +533,40 @@ class SensorHealthMonitor:
 
 # Example usage
 if __name__ == "__main__":
-    # Create sample data with drift
     np.random.seed(42)
     n = 200
     
-    # Healthy period
-    temp_healthy = 22 + np.random.randn(100) * 0.5
-    
-    # Drifting period
-    drift = np.linspace(0, 5, 100)
-    temp_drift = 22 + drift + np.random.randn(100) * 0.5
-    
+    # Healthy period with 6 features
     df = pd.DataFrame({
         'timestamp': pd.date_range('2024-01-01', periods=n, freq='1S'),
-        'temperature': np.concatenate([temp_healthy, temp_drift]),
-        'humidity': 55 + np.random.randn(n) * 2
+        'temp_dht': 22 + np.random.randn(n) * 0.5,
+        'humidity': 55 + np.random.randn(n) * 2,
+        'temp_therm': 22 + np.random.randn(n) * 0.4,
+        'sound_level': 50 + np.random.randn(n) * 5,
+        'light_level': 500 + np.random.randn(n) * 20,
+        'flame_intensity': 10 + np.random.randn(n) * 3,
     })
+    
+    # Inject a drift period
+    drift = np.linspace(0, 5, 100)
+    df.loc[100:199, 'temp_dht'] += drift
     
     # Simulate anomaly scores
     anomaly_scores = np.concatenate([
-        np.random.rand(100) * 0.01,  # Healthy
-        np.random.rand(100) * 0.05   # Drifting
+        np.random.rand(100) * 0.01,
+        np.random.rand(100) * 0.05
     ])
     threshold = 0.02
     
-    # Process
     monitor = SensorHealthMonitor()
     df_processed = monitor.process_batch(df, anomaly_scores, threshold)
-    
-    # Generate report
     report = monitor.generate_report(df_processed)
     
-    print("\n=== Sensor Health Report ===")
+    print("\n=== Multi-Sensor Health Report ===")
     print(f"Current Health: {report['current_health']:.1f}%")
     print(f"Current Fault: {report['current_fault']}")
     print(f"Uptime: {report['uptime_percent']:.1f}%")
     print(f"\nRecommendation: {report['recommendation']}")
+    print(f"\nFault distribution:")
+    for fault, count in report['fault_counts'].items():
+        print(f"  {fault}: {count}")

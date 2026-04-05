@@ -1,50 +1,61 @@
 """
-Preprocessing Module
-Handles normalization, outlier removal, and sliding window generation for LSTM.
+Preprocessing Module (Multi-Sensor)
+Handles normalization, outlier removal, and sliding window generation
+for 6-feature LSTM input.
+
+Features: temp_dht, humidity, temp_therm, sound_level, light_level, flame_intensity
 
 Notes:
-- Uses IQR method for outlier removal (more robust than z-score for sensor data)
-- Min-Max scaling preserves temporal patterns better than standardization
-- Overlapping windows (stride=1) maximize training samples and smooth predictions
-- Window size of 20 chosen to balance context vs temporal resolution
+- Uses IQR method for outlier removal (robust to sensor spikes)
+- Min-Max scaling per feature (different physical ranges)
+- Cross-validation feature engineering: |temp_dht - temp_therm|
+- Overlapping windows (stride=1) maximize training samples
 """
 
 import numpy as np
 import pandas as pd
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 from sklearn.preprocessing import MinMaxScaler
 import pickle
 
 class SensorPreprocessor:
     """
-    Preprocessing pipeline for sensor time-series data.
+    Multi-sensor preprocessing pipeline.
     """
     
-    def __init__(self, window_size: int = 20, stride: int = 1):
+    def __init__(self, window_size: int = 20, stride: int = 1, feature_columns: List[str] = None):
         """
         Args:
             window_size: Number of timesteps per window
             stride: Step size for sliding window (1 = maximum overlap)
+            feature_columns: List of feature column names
         """
         self.window_size = window_size
         self.stride = stride
+        
+        # Default to 6-feature multi-sensor setup
+        if feature_columns is None:
+            self.feature_columns = [
+                'temp_dht', 'humidity', 'temp_therm',
+                'sound_level', 'light_level', 'flame_intensity'
+            ]
+        else:
+            self.feature_columns = feature_columns
+        
         self.scaler = MinMaxScaler()
-        self.feature_columns = ['temperature', 'humidity']
         self.is_fitted = False
         
     def remove_outliers_iqr(self, df: pd.DataFrame, factor: float = 1.5) -> pd.DataFrame:
         """
         Remove statistical outliers using Interquartile Range method.
-        
-        IQR method is robust to extreme values and works well for sensor drift detection.
-        Only removes extreme outliers, preserving subtle anomalies for model to learn.
-        
-        Args:
-            factor: IQR multiplier (1.5 = standard, 3.0 = very conservative)
+        Applied independently per feature (each has different physical range).
         """
         df = df.copy()
         
         for col in self.feature_columns:
+            if col not in df.columns:
+                continue
+                
             Q1 = df[col].quantile(0.25)
             Q3 = df[col].quantile(0.75)
             IQR = Q3 - Q1
@@ -65,8 +76,7 @@ class SensorPreprocessor:
     def fit_scaler(self, df: pd.DataFrame, remove_outliers: bool = True) -> None:
         """
         Fit normalization scaler on training (healthy) data.
-        
-        CRITICAL: Only fit on known-good data to establish "normal" baseline.
+        Each feature is scaled independently to [0, 1].
         """
         df = df.copy()
         
@@ -74,36 +84,32 @@ class SensorPreprocessor:
             print("Removing statistical outliers from training data:")
             df = self.remove_outliers_iqr(df)
         
-        # Fit scaler
-        self.scaler.fit(df[self.feature_columns])
+        # Only fit on columns that exist
+        available = [c for c in self.feature_columns if c in df.columns]
+        self.scaler.fit(df[available])
         self.is_fitted = True
         
-        print(f"\nScaler fitted on {len(df)} samples")
-        print(f"Temperature range: [{df['temperature'].min():.2f}, {df['temperature'].max():.2f}]")
-        print(f"Humidity range: [{df['humidity'].min():.2f}, {df['humidity'].max():.2f}]")
+        print(f"\nScaler fitted on {len(df)} samples across {len(available)} features")
+        for col in available:
+            print(f"  {col}: [{df[col].min():.2f}, {df[col].max():.2f}]")
     
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Apply min-max normalization to sensor values.
-        """
+        """Apply min-max normalization to sensor values."""
         if not self.is_fitted:
             raise ValueError("Scaler not fitted. Call fit_scaler() first.")
         
         df = df.copy()
-        df[self.feature_columns] = self.scaler.transform(df[self.feature_columns])
+        available = [c for c in self.feature_columns if c in df.columns]
+        df[available] = self.scaler.transform(df[available])
         return df
     
     def create_sequences(self, data: np.ndarray, include_targets: bool = True) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """
         Create sliding window sequences for LSTM input.
         
-        Args:
-            data: 2D array of shape (timesteps, features)
-            include_targets: If True, return (X, y) where y = X (for autoencoder training)
-        
         Returns:
             X: array of shape (n_samples, window_size, n_features)
-            y: array of shape (n_samples, window_size, n_features) if include_targets else None
+            y: array of shape (n_samples, window_size, n_features) if include_targets
         """
         sequences = []
         
@@ -114,7 +120,6 @@ class SensorPreprocessor:
         X = np.array(sequences)
         
         if include_targets:
-            # For autoencoder: target = input
             y = X.copy()
             return X, y
         else:
@@ -122,17 +127,14 @@ class SensorPreprocessor:
     
     def prepare_training_data(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Full preprocessing pipeline for training data.
+        Full preprocessing pipeline for multi-sensor training data.
         
         Steps:
-        1. Remove outliers
+        1. Remove outliers (per feature)
         2. Fit and apply scaler
         3. Create sequences
-        
-        Returns:
-            X_train, y_train (both same for autoencoder)
         """
-        print("\n=== Preparing Training Data ===")
+        print("\n=== Preparing Multi-Sensor Training Data ===")
         
         # Fit scaler (includes outlier removal)
         self.fit_scaler(df, remove_outliers=True)
@@ -141,60 +143,45 @@ class SensorPreprocessor:
         df_norm = self.normalize(df)
         
         # Convert to numpy
-        data = df_norm[self.feature_columns].values
+        available = [c for c in self.feature_columns if c in df_norm.columns]
+        data = df_norm[available].values
         
         # Create sequences
         X, y = self.create_sequences(data, include_targets=True)
         
         print(f"Created {len(X)} training windows")
-        print(f"Input shape: {X.shape}")
+        print(f"Input shape: {X.shape}  (samples, timesteps, features)")
         
         return X, y
     
     def prepare_inference_data(self, df: pd.DataFrame) -> Tuple[np.ndarray, pd.DataFrame]:
         """
         Preprocessing pipeline for inference/testing data.
-        
-        Uses pre-fitted scaler from training phase.
-        Does NOT remove outliers (we want to detect them).
-        
-        Returns:
-            X_test: sequences
-            df_aligned: DataFrame aligned with sequence timestamps
+        Uses pre-fitted scaler. Does NOT remove outliers.
         """
         if not self.is_fitted:
             raise ValueError("Scaler not fitted. Train model first.")
         
-        print("\n=== Preparing Inference Data ===")
+        print("\n=== Preparing Multi-Sensor Inference Data ===")
         
-        # Normalize (no outlier removal)
         df_norm = self.normalize(df)
+        available = [c for c in self.feature_columns if c in df_norm.columns]
+        data = df_norm[available].values
         
-        # Convert to numpy
-        data = df_norm[self.feature_columns].values
-        
-        # Create sequences
         X, _ = self.create_sequences(data, include_targets=False)
         
-        # Align DataFrame with sequences (each sequence ends at a specific timestamp)
-        # Sequence i corresponds to df.iloc[i:i+window_size], so timestamp is df.iloc[i+window_size-1]
         df_aligned = df.iloc[self.window_size - 1::self.stride].reset_index(drop=True)
         
         print(f"Created {len(X)} inference windows")
         print(f"Input shape: {X.shape}")
-        print(f"Aligned timestamps: {len(df_aligned)}")
         
         return X, df_aligned
     
     def inverse_transform(self, data: np.ndarray) -> np.ndarray:
-        """
-        Convert normalized data back to original scale.
-        Useful for visualization and debugging.
-        """
+        """Convert normalized data back to original scale."""
         if not self.is_fitted:
             raise ValueError("Scaler not fitted.")
         
-        # Handle 3D input (batch, timesteps, features)
         original_shape = data.shape
         if len(original_shape) == 3:
             batch, timesteps, features = original_shape
@@ -228,18 +215,13 @@ class SensorPreprocessor:
         self.stride = state['stride']
         self.feature_columns = state['feature_columns']
         self.is_fitted = True
-        print(f"Preprocessor loaded from {filepath}")
+        print(f"Preprocessor loaded from {filepath} ({len(self.feature_columns)} features)")
 
 
 def split_train_test_temporal(df: pd.DataFrame, train_ratio: float = 0.7) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Split time-series data temporally (no shuffling).
-    
-    First train_ratio of data = training (assumed healthy)
-    Remaining data = testing (may contain faults)
-    
-    This mimics real deployment: calibrate on initial healthy operation,
-    then monitor for degradation over time.
+    First train_ratio = training (assumed healthy).
     """
     split_idx = int(len(df) * train_ratio)
     
@@ -257,24 +239,25 @@ def split_train_test_temporal(df: pd.DataFrame, train_ratio: float = 0.7) -> Tup
 
 # Example usage
 if __name__ == "__main__":
-    # Create sample data
     np.random.seed(42)
     n = 1000
     
     df = pd.DataFrame({
         'timestamp': pd.date_range('2024-01-01', periods=n, freq='1S'),
-        'temperature': 22 + np.random.randn(n) * 0.5,
-        'humidity': 55 + np.random.randn(n) * 2
+        'temp_dht': 22 + np.random.randn(n) * 0.5,
+        'humidity': 55 + np.random.randn(n) * 2,
+        'temp_therm': 22 + np.random.randn(n) * 0.4,
+        'sound_level': 50 + np.random.randn(n) * 5,
+        'light_level': 500 + np.random.randn(n) * 20,
+        'flame_intensity': 10 + np.random.randn(n) * 3,
     })
     
     # Add some outliers
-    df.loc[100, 'temperature'] = 100
-    df.loc[200, 'humidity'] = 150
+    df.loc[100, 'temp_dht'] = 100
+    df.loc[200, 'sound_level'] = 900
     
-    # Split data
     train, test = split_train_test_temporal(df, train_ratio=0.7)
     
-    # Preprocess
     preprocessor = SensorPreprocessor(window_size=20, stride=1)
     X_train, y_train = preprocessor.prepare_training_data(train)
     X_test, df_test_aligned = preprocessor.prepare_inference_data(test)

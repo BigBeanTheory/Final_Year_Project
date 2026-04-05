@@ -188,15 +188,15 @@ def compare_with_simple_threshold(
     baseline_count = int(len(df_test) * 0.2)
     baseline = df_test.iloc[:baseline_count]
     
-    temp_mean = baseline['temperature'].mean()
-    temp_std = baseline['temperature'].std()
+    temp_mean = baseline['temp_dht'].mean()
+    temp_std = baseline['temp_dht'].std()
     hum_mean = baseline['humidity'].mean()
     hum_std = baseline['humidity'].std()
     
     # Simple threshold method
     temp_anomalies = (
-        (df_test['temperature'] < temp_mean - 3*temp_std) |
-        (df_test['temperature'] > temp_mean + 3*temp_std)
+        (df_test['temp_dht'] < temp_mean - 3*temp_std) |
+        (df_test['temp_dht'] > temp_mean + 3*temp_std)
     )
     hum_anomalies = (
         (df_test['humidity'] < hum_mean - 3*hum_std) |
@@ -228,15 +228,15 @@ def compare_with_simple_threshold(
     fig, ax = plt.subplots(figsize=(14, 6))
     
     timestamps = df_test['timestamp'].values
-    ax.plot(timestamps, df_test['temperature'], label='Temperature', alpha=0.7)
+    ax.plot(timestamps, df_test['temp_dht'], label='Temperature', alpha=0.7)
     
     # Mark anomalies
     lstm_times = df_test[lstm_anomalies]['timestamp'].values
     simple_times = df_test[simple_anomalies]['timestamp'].values
     
-    ax.scatter(lstm_times, df_test[lstm_anomalies]['temperature'], 
+    ax.scatter(lstm_times, df_test[lstm_anomalies]['temp_dht'], 
               color='red', marker='x', s=100, label='LSTM detected', zorder=3)
-    ax.scatter(simple_times, df_test[simple_anomalies]['temperature'],
+    ax.scatter(simple_times, df_test[simple_anomalies]['temp_dht'],
               color='blue', marker='o', s=50, alpha=0.5, label='Simple detected', zorder=2)
     
     ax.axhline(temp_mean + 3*temp_std, color='gray', linestyle='--', alpha=0.5, label='±3σ bounds')
@@ -290,17 +290,17 @@ def main():
     X_test, df_test_aligned = preprocessor.prepare_inference_data(test_data)
     
     # Save preprocessor
-    preprocessor.save(output_dir / 'preprocessor.pkl')
+    preprocessor.save(str(output_dir / 'preprocessor.pkl'))
     
     # Step 4: Train LSTM Autoencoder
     print("\nSTEP 4: Training LSTM Autoencoder")
     print("-" * 60)
     model = LSTMAutoencoder(
         window_size=args.window_size,
-        n_features=2,
-        encoding_dim=16,
-        lstm_units=(64, 32),
-        dropout_rate=0.2
+        n_features=config.N_FEATURES,
+        encoding_dim=config.ENCODING_DIM,
+        lstm_units=config.LSTM_UNITS,
+        dropout_rate=config.DROPOUT_RATE
     )
     
     history = model.train(
@@ -312,7 +312,7 @@ def main():
     )
     
     # Save model
-    model.save(output_dir / 'lstm_autoencoder.h5')
+    model.save(str(output_dir / 'lstm_autoencoder.h5'))
     
     # Plot training history
     model.plot_training_history()

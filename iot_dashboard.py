@@ -25,9 +25,13 @@ from typing import Optional
 import sys
 from pathlib import Path
 
-# Serial communication
-import serial
-import serial.tools.list_ports
+# Serial communication (optional — not available on cloud/Render)
+try:
+    import serial
+    import serial.tools.list_ports
+    SERIAL_AVAILABLE = True
+except ImportError:
+    SERIAL_AVAILABLE = False
 
 # Import custom modules
 try:
@@ -63,103 +67,70 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* Global font scaling */
+    html, body, [class*="css"] { font-size: 13px !important; }
     .main-header {
-        font-size: 2.2rem;
+        font-size: 1.6rem;
         font-weight: 700;
         background: linear-gradient(90deg, #1a73e8, #00c853, #ff6b6b);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0;
     }
-    .sub-header {
-        color: #888;
-        font-size: 1rem;
-        margin-top: -10px;
-    }
-    .metric-card {
-        background: linear-gradient(135deg, #1e1e2e, #2d2d44);
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.1);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }
+    .sub-header { color: #888; font-size: 0.8rem; margin-top: -8px; }
     .alert-critical {
         background: linear-gradient(135deg, #d32f2f, #b71c1c);
-        color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        font-weight: bold;
-        font-size: 1.05rem;
+        color: white; padding: 10px 16px; border-radius: 8px;
+        font-weight: bold; font-size: 0.9rem;
     }
     .alert-warning {
         background: linear-gradient(135deg, #f57c00, #e65100);
-        color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        font-weight: bold;
-        font-size: 1.05rem;
+        color: white; padding: 10px 16px; border-radius: 8px;
+        font-weight: bold; font-size: 0.9rem;
     }
     .alert-normal {
         background: linear-gradient(135deg, #2e7d32, #1b5e20);
-        color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        font-weight: bold;
-        font-size: 1.05rem;
+        color: white; padding: 10px 16px; border-radius: 8px;
+        font-weight: bold; font-size: 0.9rem;
     }
     .connected-badge {
-        background-color: #00c853;
-        color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
+        background-color: #00c853; color: white;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 0.75rem; font-weight: 600;
     }
     .disconnected-badge {
-        background-color: #ff1744;
-        color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-    .sensor-badge {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        margin: 2px;
+        background-color: #ff1744; color: white;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 0.75rem; font-weight: 600;
     }
     div[data-testid="column"] {
         background: rgba(30,30,46,0.4);
-        padding: 15px;
-        border-radius: 15px;
+        padding: 10px;
+        border-radius: 12px;
         border: 1px solid rgba(255,255,255,0.05);
-        transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
     div[data-testid="column"]:hover {
-        transform: scale(1.02);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-        background: rgba(45,45,68,0.6);
-        z-index: 10;
+        transform: scale(1.015);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+        background: rgba(45,45,68,0.5);
     }
     .local-alert {
-        padding: 5px 10px;
-        border-radius: 8px;
-        font-size: 0.85rem;
-        font-weight: bold;
-        text-align: center;
-        margin-bottom: 5px;
+        padding: 4px 8px; border-radius: 6px;
+        font-size: 0.7rem; font-weight: bold;
+        text-align: center; margin-bottom: 4px;
         animation: pulse 2s infinite;
     }
     .local-alert-critical { background-color: #d32f2f; color: white; }
     .local-alert-warning { background-color: #f57c00; color: white; }
     @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.8; }
-        100% { opacity: 1; }
+        0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; }
     }
+    /* Smaller Streamlit metrics */
+    [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
+    [data-testid="stMetricLabel"] { font-size: 0.7rem !important; }
+    /* Smaller subheaders */
+    .stMarkdown h2, .stMarkdown h3 { font-size: 1.1rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -169,6 +140,8 @@ st.markdown("""
 
 def get_available_ports():
     """List available COM ports."""
+    if not SERIAL_AVAILABLE:
+        return {}
     ports = serial.tools.list_ports.comports()
     return {f"{p.device} - {p.description}": p.device for p in ports}
 
@@ -219,45 +192,6 @@ def parse_serial_line(line: str) -> Optional[dict]:
         return reading
     except (ValueError, IndexError):
         return None
-    try:
-        parts = line.split(",")
-        
-        if len(parts) == 6:
-            reading = {
-                'timestamp': datetime.now(),
-                'temp_dht': float(parts[0]),
-                'humidity': float(parts[1]),
-                'temp_therm': float(parts[2]),
-                'sound_level': float(parts[3]),
-                'light_level': float(parts[4]),
-                'flame_intensity': float(parts[5]),
-            }
-        elif len(parts) == 2:
-            # Legacy 2-field format
-            temp = float(parts[0])
-            hum = float(parts[1])
-            reading = {
-                'timestamp': datetime.now(),
-                'temp_dht': temp,
-                'humidity': hum,
-                'temp_therm': temp + np.random.randn() * 0.3,
-                'sound_level': 45 + np.random.randn() * 4,
-                'light_level': 500 + np.random.randn() * 15,
-                'flame_intensity': 8 + abs(np.random.randn() * 2),
-            }
-        else:
-            return None
-        
-        # Validate ranges
-        for feat in config.FEATURE_NAMES:
-            if feat in reading:
-                lo, hi = config.SENSOR_RANGES[feat]
-                if not (lo <= reading[feat] <= hi):
-                    return None
-        
-        return reading
-    except (ValueError, IndexError):
-        return None
 
 def send_actuator_command(serial_port, command: str):
     """Send a command to Arduino actuators."""
@@ -294,7 +228,11 @@ def compute_anomaly_scores_statistical(df: pd.DataFrame) -> np.ndarray:
     return scores
 
 def compute_anomaly_scores_lstm(df: pd.DataFrame, model, preprocessor) -> np.ndarray:
-    """Compute anomaly scores using the trained LSTM Autoencoder."""
+    """Compute anomaly scores using the trained LSTM Autoencoder.
+    
+    Also stores per-feature reconstruction errors in session state so the
+    dashboard can show exactly which sensor is driving any anomaly.
+    """
     scores = np.zeros(len(df))
     if len(df) < config.WINDOW_SIZE:
         return scores
@@ -303,16 +241,19 @@ def compute_anomaly_scores_lstm(df: pd.DataFrame, model, preprocessor) -> np.nda
         feature_cols = [c for c in preprocessor.feature_columns if c in df.columns]
         feature_df = df[feature_cols].copy()
         
-        # Spoof missing channels with exact scaler medians
+        # Spoof / impute missing channels
         for i, col in enumerate(preprocessor.feature_columns):
             if col in feature_df.columns:
                 if feature_df[col].isna().all() or len(feature_df) == 0:
-                    midpoint = preprocessor.scaler.data_min_[i] + (preprocessor.scaler.data_max_[i] - preprocessor.scaler.data_min_[i]) / 2.0
+                    midpoint = (preprocessor.scaler.data_min_[i] +
+                                preprocessor.scaler.data_max_[i]) / 2.0
                     feature_df[col] = midpoint
                 else:
                     feature_df[col] = feature_df[col].ffill().bfill().fillna(0)
-                    
-        feature_scaled = preprocessor.scaler.transform(feature_df)
+        
+        # Scale and CLIP to [0,1] so out-of-range live readings don't spike
+        # the reconstruction error artificially (see iot_preprocessing.py fix)
+        feature_scaled = np.clip(preprocessor.scaler.transform(feature_df), 0.0, 1.0)
         
         windows = []
         for i in range(len(feature_scaled) - config.WINDOW_SIZE + 1):
@@ -328,7 +269,19 @@ def compute_anomaly_scores_lstm(df: pd.DataFrame, model, preprocessor) -> np.nda
         scores[offset:offset + len(errors)] = errors
         if len(errors) > 0:
             scores[:offset] = errors[0]
-    except Exception as e:
+        
+        # ---- Per-feature error for the most recent window ----
+        # This is what the fault-localization panel uses to answer
+        # "which sensor is causing the anomaly?"
+        if len(X) > 0:
+            last_window = X[-1:]  # shape (1, window, features)
+            per_feat = model.compute_per_feature_error(last_window)
+            # per_feat is dict {name: array(1,)} — flatten to scalar
+            st.session_state.per_feature_errors = {
+                k: float(v[0]) for k, v in per_feat.items()
+            }
+
+    except Exception:
         scores = compute_anomaly_scores_statistical(df)
     
     return scores
@@ -454,6 +407,153 @@ def create_single_sensor_timeseries(df: pd.DataFrame, feat: str, max_points: int
         plot_bgcolor='rgba(0,0,0,0)',
         xaxis=dict(showgrid=False, visible=False),
         yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)'),
+        hovermode='x unified'
+    )
+    return fig
+
+
+def create_fault_localization_chart(
+    per_feature_errors: dict,
+    threshold: float,
+    selected_sensors: list
+) -> go.Figure:
+    """
+    Horizontal bar chart showing per-sensor reconstruction error.
+    This is the primary answer to 'which sensor is acting up?'
+    
+    Bars are colored green/orange/red based on their error relative to
+    the anomaly threshold.  The threshold line makes it immediately
+    obvious which sensors are over the limit.
+    """
+    feats = [f for f in config.FEATURE_NAMES
+             if f in per_feature_errors and f in selected_sensors]
+    if not feats:
+        return go.Figure()
+    
+    errors = [per_feature_errors[f] for f in feats]
+    labels = [config.FEATURE_LABELS.get(f, f) for f in feats]
+    
+    # Per-sensor severity color
+    colors = []
+    for e in errors:
+        if e > threshold:
+            colors.append('#ff1744')     # red — over threshold
+        elif e > threshold * 0.7:
+            colors.append('#ff9800')     # orange — approaching
+        else:
+            colors.append('#00c853')     # green — healthy
+    
+    # Sort highest error first
+    paired = sorted(zip(errors, labels, colors), reverse=True)
+    errors, labels, colors = zip(*paired) if paired else ([], [], [])
+    
+    # Percentage of threshold for hover text
+    pct = [f"{e/threshold*100:.0f}% of threshold" for e in errors]
+    
+    fig = go.Figure(go.Bar(
+        x=list(errors),
+        y=list(labels),
+        orientation='h',
+        marker_color=list(colors),
+        text=list(pct),
+        textposition='outside',
+        hovertemplate='%{y}<br>Error: %{x:.5f}<br>%{text}<extra></extra>',
+        cliponaxis=False
+    ))
+    
+    # Threshold line
+    fig.add_vline(
+        x=threshold,
+        line_dash='dash', line_color='#ff1744', line_width=2,
+        annotation_text=f'Threshold ({threshold:.4f})',
+        annotation_position='top right',
+        annotation_font_color='#ff1744'
+    )
+    
+    fig.update_layout(
+        title='🔬 Per-Sensor Fault Localization',
+        height=max(180, len(feats) * 45 + 80),
+        template='plotly_dark',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=10, r=120, t=50, b=30),
+        xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.06)',
+                   title='Reconstruction Error (MSE)'),
+        yaxis=dict(showgrid=False),
+        bargap=0.35
+    )
+    return fig
+
+
+def create_sensor_sparkline_with_anomaly(
+    df: pd.DataFrame,
+    feat: str,
+    threshold: float,
+    per_feature_errors: dict,
+    max_points: int = 150
+) -> go.Figure:
+    """
+    Per-sensor time-series with anomaly regions highlighted in red.
+    Shows the actual sensor value AND marks the windows where that
+    specific sensor's reconstruction error exceeded the threshold —
+    so you immediately see *when* and *how* it deviated.
+    """
+    display_df = df.tail(max_points).copy()
+    color = config.SENSOR_COLORS.get(feat, '#bb86fc')
+    unit = config.FEATURE_UNITS.get(feat, '')
+    
+    fig = go.Figure()
+    
+    # Main sensor trace
+    fig.add_trace(go.Scatter(
+        x=display_df['timestamp'],
+        y=display_df[feat],
+        mode='lines',
+        name='Reading',
+        line=dict(color=color, width=2),
+        fill='tozeroy',
+        fillcolor=f'rgba({int(color[1:3],16)},{int(color[3:5],16)},{int(color[5:7],16)},0.08)',
+        hovertemplate=f'%{{x}}<br>{feat}: %{{y:.2f}} {unit}<extra></extra>'
+    ))
+    
+    # Overlay anomaly markers using the global anomaly_score column
+    # (per-feature error not stored per-row, but overall anomaly flags the row)
+    if 'anomaly_score' in display_df.columns and threshold > 0:
+        anomalous = display_df[display_df['anomaly_score'] > threshold]
+        if len(anomalous) > 0:
+            fig.add_trace(go.Scatter(
+                x=anomalous['timestamp'],
+                y=anomalous[feat],
+                mode='markers',
+                name='Anomaly window',
+                marker=dict(
+                    color='#ff1744', size=7, symbol='circle',
+                    line=dict(width=1.5, color='white')
+                ),
+                hovertemplate=f'Anomaly detected<br>{feat}: %{{y:.2f}} {unit}<extra></extra>'
+            ))
+    
+    # Current per-feature error as subtitle
+    current_err = per_feature_errors.get(feat, 0.0)
+    err_pct = current_err / (threshold + 1e-10) * 100
+    status = '🔴 OVER' if current_err > threshold else ('🟡' if current_err > threshold * 0.7 else '🟢')
+    subtitle = f'{status} Error: {current_err:.4f} ({err_pct:.0f}% of threshold)'
+    
+    fig.update_layout(
+        title=dict(
+            text=f"{config.FEATURE_LABELS.get(feat, feat)}<br>"
+                 f"<span style='font-size:11px;color:#aaa'>{subtitle}</span>",
+            font=dict(size=13)
+        ),
+        height=200,
+        template='plotly_dark',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=10, r=10, t=55, b=10),
+        xaxis=dict(showgrid=False, visible=False),
+        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)',
+                   ticksuffix=f' {unit}'),
+        showlegend=False,
         hovermode='x unified'
     )
     return fig
@@ -720,16 +820,79 @@ def create_sensor_correlation_heatmap(df: pd.DataFrame, max_points: int = 200) -
 
 
 @st.dialog("Sensor Analytics", width="large")
-def sensor_lightbox(df: pd.DataFrame, feat: str):
-    st.subheader(config.FEATURE_LABELS.get(feat, feat))
-    fig = create_single_sensor_timeseries(df, feat, max_points=500)
-    fig.update_layout(height=350)
-    st.plotly_chart(fig, use_container_width=True)
+def sensor_lightbox(df: pd.DataFrame, feat: str, threshold: float = 0.0):
+    """Detailed per-sensor diagnostic view."""
+    label = config.FEATURE_LABELS.get(feat, feat)
+    unit = config.FEATURE_UNITS.get(feat, '')
+    per_feat_errors = st.session_state.get('per_feature_errors', {})
     
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Historical Min", f"{df[feat].min():.1f}")
-    c2.metric("Historical Mean", f"{df[feat].mean():.1f}")
-    c3.metric("Historical Max", f"{df[feat].max():.1f}")
+    st.subheader(label)
+    
+    # ---- Top metrics row ----
+    current_err = per_feat_errors.get(feat, 0.0)
+    err_pct = current_err / (threshold + 1e-10) * 100
+    
+    c1, c2, c3, c4 = st.columns(4)
+    latest_val = df[feat].iloc[-1] if feat in df.columns and len(df) > 0 else 0
+    c1.metric("Current Reading", f"{latest_val:.2f} {unit}")
+    c2.metric("Reconstruction Error", f"{current_err:.5f}",
+              delta=f"{err_pct:.0f}% of threshold",
+              delta_color="inverse")
+    c3.metric("Historical Min", f"{df[feat].min():.2f} {unit}")
+    c4.metric("Historical Max", f"{df[feat].max():.2f} {unit}")
+    
+    st.markdown("---")
+    
+    # ---- Sensor error status ----
+    if threshold > 0:
+        if current_err > threshold:
+            st.error(f"🔴 **This sensor is OVER the anomaly threshold.** "
+                     f"Error {current_err:.5f} > threshold {threshold:.5f}. "
+                     f"It is a primary contributor to the current alert.")
+        elif current_err > threshold * 0.7:
+            st.warning(f"🟡 **Approaching threshold.** "
+                       f"Error is at {err_pct:.0f}% of the threshold — monitor closely.")
+        else:
+            st.success(f"🟢 **Sensor healthy.** "
+                       f"Error is at {err_pct:.0f}% of threshold — normal operation.")
+    
+    # ---- Full time-series with anomaly overlay ----
+    fig_ts = create_sensor_sparkline_with_anomaly(
+        df, feat, threshold, per_feat_errors, max_points=500
+    )
+    fig_ts.update_layout(height=300)
+    st.plotly_chart(fig_ts, use_container_width=True)
+    
+    # ---- Stats row ----
+    st.markdown("**Rolling Statistics (last 50 readings)**")
+    if len(df) >= 10 and feat in df.columns:
+        recent = df[feat].tail(50)
+        s1, s2, s3, s4 = st.columns(4)
+        s1.metric("Mean", f"{recent.mean():.2f}")
+        s2.metric("Std Dev", f"{recent.std():.3f}")
+        s3.metric("Skewness", f"{recent.skew():.2f}")
+        
+        # Drift indicator
+        if len(recent) >= 20:
+            x = np.arange(len(recent))
+            slope = np.polyfit(x, recent.values, 1)[0]
+            s4.metric("Drift Rate", f"{slope:+.4f}/sample",
+                      delta="Drifting" if abs(slope) > 0.01 else "Stable",
+                      delta_color="inverse" if abs(slope) > 0.01 else "normal")
+    
+    # ---- Cross-validation panel (temperature sensors only) ----
+    if feat in ('temp_dht', 'temp_therm') and 'temp_dht' in df.columns and 'temp_therm' in df.columns:
+        st.markdown("---")
+        st.markdown("**Cross-Validation: DHT11 vs Thermistor**")
+        diff = (df['temp_dht'] - df['temp_therm']).tail(50)
+        max_diff = diff.abs().max()
+        mean_diff = diff.abs().mean()
+        cv_c1, cv_c2 = st.columns(2)
+        cv_c1.metric("Mean |Δ temp|", f"{mean_diff:.2f} °C",
+                     delta="OK" if mean_diff < config.TEMP_CROSS_VALIDATION_MAX_DIFF else "DIVERGING",
+                     delta_color="normal" if mean_diff < config.TEMP_CROSS_VALIDATION_MAX_DIFF else "inverse")
+        cv_c2.metric("Max |Δ temp|", f"{max_diff:.2f} °C",
+                     delta=f"Limit: {config.TEMP_CROSS_VALIDATION_MAX_DIFF} °C")
 
 def main():
     """Main dashboard application."""
@@ -770,6 +933,9 @@ def main():
             noise_window=config.NOISE_WINDOW,
             freeze_threshold=config.FREEZE_THRESHOLD
         )
+    if 'per_feature_errors' not in st.session_state:
+        # Latest per-sensor reconstruction errors: {feat: float}
+        st.session_state.per_feature_errors = {f: 0.0 for f in config.FEATURE_NAMES}
     if 'lstm_model' not in st.session_state:
         st.session_state.lstm_model = None
         st.session_state.lstm_preprocessor = None
@@ -782,6 +948,25 @@ def main():
                 st.session_state.lstm_threshold = threshold
     
     # ========================================================================
+    # CLOUD AUTO-SIMULATION (Render / Headless deployment)
+    # ========================================================================
+    # If no serial ports are detected and we're not already streaming,
+    # auto-start simulation so the deployed site shows a live demo.
+    if 'cloud_auto_started' not in st.session_state:
+        st.session_state.cloud_auto_started = False
+    
+    available_ports = get_available_ports()
+    is_cloud = len(available_ports) == 0 and not SERIAL_AVAILABLE
+    
+    if (is_cloud
+        and not st.session_state.streaming
+        and not st.session_state.cloud_auto_started):
+        st.session_state.sim_mode = True
+        st.session_state.streaming = True
+        st.session_state.sim_index = 0
+        st.session_state.cloud_auto_started = True
+
+    # ========================================================================
     # SIDEBAR
     # ========================================================================
     
@@ -791,7 +976,8 @@ def main():
         st.markdown("---")
         st.header("🔌 Connection")
         
-        available_ports = get_available_ports()
+        # Reuse ports already fetched above
+        # available_ports is already set before sidebar
         
         if available_ports:
             selected_label = st.selectbox(
@@ -821,13 +1007,14 @@ def main():
             disconnect_btn = st.button("🔴 Disconnect", use_container_width=True,
                                         disabled=not st.session_state.serial_connected)
         
-        if connect_btn and selected_port:
+        if connect_btn and selected_port and SERIAL_AVAILABLE:
             try:
                 ser = serial.Serial(selected_port, baud_rate, timeout=config.SERIAL_TIMEOUT)
                 st.session_state.serial_port = ser
                 st.session_state.serial_connected = True
                 st.session_state.streaming = True
                 st.session_state.sim_mode = False
+                st.session_state.cloud_auto_started = False
                 time.sleep(2)
                 st.rerun()
             except serial.SerialException as e:
@@ -849,11 +1036,17 @@ def main():
         st.subheader("🎛️ Active Modules")
         
         inv_labels = {v: k for k, v in config.FEATURE_LABELS.items()}
+        # Default: all sensors selected. Deselect any sensor not physically connected.
+        if 'selected_sensors' not in st.session_state:
+            st.session_state.selected_sensors = list(config.FEATURE_NAMES)
+        
+        current_default = [config.FEATURE_LABELS[s] for s in st.session_state.selected_sensors
+                           if s in config.FEATURE_LABELS]
         selected_labels = st.multiselect(
             "Select Connected Hardware:",
             options=list(config.FEATURE_LABELS.values()),
-            default=[],
-            help="Uncheck missing sensors to safely drop their gauges and spoof their ML outputs"
+            default=current_default,
+            help="Deselect sensors that are not physically wired — their channels will be spoofed so the LSTM doesn't misfire"
         )
         st.session_state.selected_sensors = [inv_labels[label] for label in selected_labels]
 
@@ -938,7 +1131,7 @@ def main():
                     raw_line = st.session_state.serial_port.readline().decode('utf-8', errors='ignore')
                     if raw_line.strip():
                         reading = parse_serial_line(raw_line)
-                except (serial.SerialException, OSError):
+                except Exception:
                     st.session_state.serial_connected = False
                     st.session_state.streaming = False
                     st.error("Serial connection lost!")
@@ -1017,8 +1210,6 @@ def main():
         if len(df) == 0:
             if st.session_state.streaming:
                 st.info("⏳ Waiting for multi-sensor data...")
-                time.sleep(config.SERIAL_READ_INTERVAL)
-                st.rerun()
             else:
                 st.info("👆 Connect to Arduino or start simulation to begin monitoring")
                 
@@ -1044,85 +1235,159 @@ def main():
                     **Without Arduino (Test Mode):**
                     Click **Start Simulation** — generates realistic multi-sensor data with fault injection!
                     """)
-            st.stop()
+            return  # Let fragment's run_every handle the next tick
         
         # --- Current Status Metrics ---
         latest = df.iloc[-1] if len(df) > 0 else pd.Series()
-        
-        def get_sensor_alert(feat: str):
-            if len(df) > 10 and feat in latest and not pd.isna(latest[feat]):
+        active_threshold = (st.session_state.lstm_threshold
+                            if st.session_state.lstm_model
+                            else config.STAT_ZSCORE_THRESHOLD)
+        per_feat_errors = st.session_state.get('per_feature_errors', {})
+
+        # Sensors to display = intersection of user selection and sensors that
+        # have reported at least one valid reading in the last 5 samples
+        user_selection = st.session_state.get('selected_sensors', config.FEATURE_NAMES)
+        recent_5 = df.tail(5)
+        active_sensors = [
+            f for f in config.FEATURE_NAMES
+            if f in user_selection
+            and f in recent_5.columns
+            and recent_5[f].notna().any()
+        ]
+
+        def sensor_alert_info(feat: str):
+            """
+            Returns (severity, message) for a sensor using per-feature
+            reconstruction error when the LSTM is active, falling back to
+            z-score otherwise.  Much more accurate than pure z-score alone.
+            """
+            err = per_feat_errors.get(feat, 0.0)
+            if active_threshold and active_threshold > 0 and err > 0:
+                pct = err / active_threshold * 100
+                if err > active_threshold:
+                    return 'critical', f'⚠️ Error {pct:.0f}% of threshold — anomalous'
+                elif err > active_threshold * 0.7:
+                    return 'warning', f'⚠️ Error {pct:.0f}% of threshold — watch closely'
+            # z-score fallback for statistical mode
+            if len(df) > 10 and feat in latest and not pd.isna(latest.get(feat)):
                 mean = df[feat].mean()
                 std = df[feat].std() + 0.01
                 z = abs(latest[feat] - mean) / std
-                if z > 3:
-                    return "Critical: High Deviation"
-            return None
-        # Determine connected sensors based on last 5 readings
-        connected_sensors = []
-        if len(df) > 0:
-            recent_df = df.tail(5)
-            for feat in config.FEATURE_NAMES:
-                if feat in recent_df.columns and recent_df[feat].notna().any():
-                    connected_sensors.append(feat)
-        # -------------------------------------------------------------
-        # ROW 1: System Diagnostics
-        # -------------------------------------------------------------
-        st.subheader("🌐 System Diagnostics")
-        cols_sys = st.columns([1, 2])
-        
-        with cols_sys[0]:
-            health = latest.get('health_score', 100) if not latest.empty else 100
-            fault = latest.get('fault_type', 'Healthy') if not latest.empty else 'Healthy'
-            alert = latest.get('alert_level', 'Normal') if not latest.empty else 'Normal'
-            
-            if alert == 'Critical':
-                st.markdown(f'<div class="alert-critical">🚨 {fault}</div>', unsafe_allow_html=True)
-            elif alert == 'Warning':
-                st.markdown(f'<div class="alert-warning">⚠️ {fault}</div>', unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="alert-normal">✅ Systems Nominal</div>', unsafe_allow_html=True)
-                
-            fig_health = create_health_gauge(health)
-            st.plotly_chart(fig_health, use_container_width=True, key="sys_health_gauge")
-            
-            healthy_pct = (df['alert_level'] == 'Normal').sum() / len(df) * 100 if len(df) > 0 else 100
-            st.metric("System Uptime", f"{healthy_pct:.1f}%")
-        with cols_sys[1]:
-            active_threshold = st.session_state.lstm_threshold if st.session_state.lstm_model else config.STAT_ZSCORE_THRESHOLD
-            anomaly_count = int((df['anomaly_score'] > active_threshold).sum()) if 'anomaly_score' in df.columns else 0
-            
-            st.markdown(f"**Anomaly History** (Total Detected: {anomaly_count})")
-            if len(df) > 0:
-                fig_anomaly = create_anomaly_chart(df, active_threshold, max_points=300)
-                fig_anomaly.update_layout(height=350) 
-                st.plotly_chart(fig_anomaly, use_container_width=True, key="anomaly_main")
-        st.markdown("---")
-        # -------------------------------------------------------------
-        # ROW 2+: Sensor Network Data (Dynamic Wrapping Layout)
-        # -------------------------------------------------------------
-        st.subheader("📊 Sensor Network Data")
-        if not connected_sensors:
-            st.warning("No sensors connected or reporting valid data.")
+                if z > 3.5:
+                    return 'critical', f'⚠️ Z-score {z:.1f} — critical deviation'
+                elif z > 2.5:
+                    return 'warning', f'⚠️ Z-score {z:.1f} — elevated'
+            return None, None
+
+        # ---------------------------------------------------------------
+        # STATUS BANNER (full width)
+        # ---------------------------------------------------------------
+        health = latest.get('health_score', 100) if not latest.empty else 100
+        fault  = latest.get('fault_type',   'Healthy') if not latest.empty else 'Healthy'
+        alert  = latest.get('alert_level',  'Normal')  if not latest.empty else 'Normal'
+
+        if alert == 'Critical':
+            st.markdown(f'<div class="alert-critical">🚨 ALERT — {fault}</div>', unsafe_allow_html=True)
+        elif alert == 'Warning':
+            st.markdown(f'<div class="alert-warning">⚠️ WARNING — {fault}</div>', unsafe_allow_html=True)
         else:
-            for i in range(0, len(connected_sensors), 3):
+            st.markdown('<div class="alert-normal">✅ All Systems Nominal</div>', unsafe_allow_html=True)
+
+        st.markdown("")
+
+        # ---------------------------------------------------------------
+        # ROW 1: Health Gauge + Key Metrics (2 columns, breathing room)
+        # ---------------------------------------------------------------
+        col_health, col_stats = st.columns([1, 1])
+
+        with col_health:
+            fig_health = create_health_gauge(health)
+            fig_health.update_layout(height=280)
+            st.plotly_chart(fig_health, use_container_width=True, key="sys_health_gauge")
+
+            healthy_pct = ((df['alert_level'] == 'Normal').sum() / len(df) * 100
+                           if len(df) > 0 else 100)
+            anomaly_count = (int((df['anomaly_score'] > active_threshold).sum())
+                             if 'anomaly_score' in df.columns else 0)
+            m1, m2 = st.columns(2)
+            m1.metric("Uptime", f"{healthy_pct:.1f}%")
+            m2.metric("Anomalies", f"{anomaly_count}")
+
+        with col_stats:
+            fig_anomaly = create_anomaly_chart(df, active_threshold, max_points=300)
+            fig_anomaly.update_layout(height=320)
+            st.plotly_chart(fig_anomaly, use_container_width=True, key="anomaly_main")
+
+        st.markdown("")
+
+        # ---------------------------------------------------------------
+        # ROW 2: Fault Localization (full width — needs horizontal space)
+        # ---------------------------------------------------------------
+        if st.session_state.lstm_model and any(v > 0 for v in per_feat_errors.values()):
+            fig_loc = create_fault_localization_chart(
+                per_feat_errors, active_threshold, active_sensors
+            )
+            fig_loc.update_layout(height=280)
+            st.plotly_chart(fig_loc, use_container_width=True, key="fault_loc")
+
+            # Pinpoint the worst offender
+            offenders = {f: e for f, e in per_feat_errors.items()
+                         if f in active_sensors and e > active_threshold}
+            if offenders:
+                worst = max(offenders, key=offenders.get)
+                worst_label = config.FEATURE_LABELS.get(worst, worst)
+                st.error(f"**Primary fault source:** {worst_label}  \n"
+                         f"Error {offenders[worst]:.5f} ({offenders[worst]/active_threshold*100:.0f}% of threshold)")
+            else:
+                st.success("All sensor reconstruction errors within normal bounds.")
+        else:
+            # Statistical mode: show correlation heatmap
+            fig_corr = create_sensor_correlation_heatmap(df, max_points=200)
+            fig_corr.update_layout(height=300)
+            st.plotly_chart(fig_corr, use_container_width=True, key="corr_main")
+
+        st.markdown("---")
+
+        # ---------------------------------------------------------------
+        # ROW 3+: Per-Sensor Gauges (3 per row, click for details)
+        # ---------------------------------------------------------------
+        st.subheader("📊 Sensor Network")
+
+        if not active_sensors:
+            st.warning("No sensors selected or reporting data.  "
+                       "Use **Active Modules** in the sidebar to choose sensors.")
+        else:
+            for i in range(0, len(active_sensors), 3):
+                row_feats = active_sensors[i:i+3]
                 cols_r = st.columns(3)
-                for j in range(3):
-                    if i + j < len(connected_sensors):
-                        feat = connected_sensors[i + j]
-                        with cols_r[j]:
-                            alert_msg = get_sensor_alert(feat)
-                            if alert_msg:
-                                st.markdown(f'<div class="local-alert local-alert-critical">⚠️ {alert_msg}</div>', unsafe_allow_html=True)
-                            
-                            val = latest.get(feat, 0)
-                            min_val, max_val = config.SENSOR_RANGES.get(feat, (0, 100))
-                            
-                            fig = create_single_sensor_gauge(val, feat, min_val, max_val)
-                            st.plotly_chart(fig, use_container_width=True, key=f"gauge_{feat}_{i}_{j}")
-                            
-                            if st.button(f"🔍 View Details", key=f"btn_modal_{feat}", use_container_width=True):
-                                sensor_lightbox(df, feat)
-    
+
+                for j, feat in enumerate(row_feats):
+                    with cols_r[j]:
+                        severity, alert_msg = sensor_alert_info(feat)
+                        if severity == 'critical':
+                            st.markdown(
+                                f'<div class="local-alert local-alert-critical">{alert_msg}</div>',
+                                unsafe_allow_html=True)
+                        elif severity == 'warning':
+                            st.markdown(
+                                f'<div class="local-alert local-alert-warning">{alert_msg}</div>',
+                                unsafe_allow_html=True)
+
+                        val = latest.get(feat, 0) if not latest.empty else 0
+                        if pd.isna(val):
+                            val = 0
+                        min_val, max_val = config.SENSOR_RANGES.get(feat, (0, 100))
+
+                        fig_g = create_single_sensor_gauge(val, feat, min_val, max_val)
+                        fig_g.update_layout(height=170, margin=dict(l=15, r=15, t=35, b=10))
+                        st.plotly_chart(fig_g, use_container_width=True,
+                                        key=f"gauge_{feat}_{i}_{j}")
+
+                        if st.button("🔬 Diagnose", key=f"btn_{feat}_{i}_{j}",
+                                     use_container_width=True):
+                            sensor_lightbox(df, feat, threshold=active_threshold)
+
+
     _live_dashboard_fragment()
 
 if __name__ == "__main__":
