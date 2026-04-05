@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: iot-predictive-maintenance
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run iot_dashboard.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --browser.gatherUsageStats=false
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.8"
+      - key: TF_USE_LEGACY_KERAS
+        value: "1"
