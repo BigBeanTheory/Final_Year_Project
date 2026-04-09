@@ -3,7 +3,7 @@ services:
     name: iot-predictive-maintenance
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run iot_dashboard.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --browser.gatherUsageStats=false
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.8"

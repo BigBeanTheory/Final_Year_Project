@@ -1,0 +1,770 @@
+/* ============================================================================
+   IoT Predictive Maintenance Dashboard — Premium Dark Theme
+   ============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ---- CSS VARIABLES ---- */
+:root {
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #111827;
+    --bg-card: #1a1f35;
+    --bg-card-hover: #222842;
+    --bg-glass: rgba(26, 31, 53, 0.7);
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-glow: rgba(99, 102, 241, 0.3);
+
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+
+    --accent-blue: #6366f1;
+    --accent-purple: #a855f7;
+    --accent-green: #22c55e;
+    --accent-yellow: #eab308;
+    --accent-red: #ef4444;
+    --accent-cyan: #06b6d4;
+
+    --gradient-main: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+    --gradient-card: linear-gradient(145deg, rgba(26, 31, 53, 0.9), rgba(17, 24, 39, 0.9));
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.15);
+
+    --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---- RESET & BASE ---- */
+*, *::before, *::after {
+    margin: 0; padding: 0; box-sizing: border-box;
+}
+
+html {
+    font-size: 14px;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    line-height: 1.5;
+}
+
+/* Animated gradient background */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08), transparent 60%),
+        radial-gradient(ellipse at 80% 80%, rgba(168, 85, 247, 0.06), transparent 60%),
+        radial-gradient(ellipse at 50% 50%, rgba(6, 182, 212, 0.04), transparent 70%);
+    pointer-events: none; z-index: 0;
+}
+
+/* ---- LAYOUT ---- */
+.app-container {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+}
+
+/* ---- SIDEBAR ---- */
+.sidebar {
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-subtle);
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    backdrop-filter: blur(12px);
+}
+
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
+}
+
+.sidebar-brand {
+    display: flex; align-items: center; gap: 12px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.sidebar-brand .brand-icon {
+    font-size: 1.8rem;
+}
+.sidebar-brand .brand-text {
+    font-size: 1.1rem;
+    font-weight: 700;
+    background: var(--gradient-main);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.2;
+}
+.sidebar-brand .brand-sub {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sidebar-section h3 {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+/* ---- BUTTONS ---- */
+.btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    width: 100%;
+}
+.btn:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-glow);
+    box-shadow: var(--shadow-glow);
+    transform: translateY(-1px);
+}
+.btn:active { transform: translateY(0); }
+
+.btn-primary {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: white;
+}
+.btn-primary:hover {
+    background: #5558e6;
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.35);
+}
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: var(--accent-red);
+}
+.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.25);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.2);
+}
+
+.btn-success {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: var(--accent-green);
+}
+
+.btn-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+/* ---- STATUS BADGE ---- */
+.badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.badge-green {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--accent-green);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.badge-red {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-red);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.badge-yellow {
+    background: rgba(234, 179, 8, 0.15);
+    color: var(--accent-yellow);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+}
+.badge-blue {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--accent-blue);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.badge .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    animation: pulse-dot 2s infinite;
+}
+.badge-green .dot { background: var(--accent-green); }
+.badge-red .dot { background: var(--accent-red); }
+.badge-yellow .dot { background: var(--accent-yellow); }
+.badge-blue .dot { background: var(--accent-blue); }
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ---- MAIN CONTENT ---- */
+.main-content {
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+/* ---- ALERT BANNER ---- */
+.alert-banner {
+    padding: 14px 20px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: flex; align-items: center; gap: 10px;
+    transition: var(--transition);
+}
+.alert-normal {
+    background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.05));
+    border: 1px solid rgba(34,197,94,0.2);
+    color: var(--accent-green);
+}
+.alert-warning {
+    background: linear-gradient(135deg, rgba(234,179,8,0.15), rgba(234,179,8,0.05));
+    border: 1px solid rgba(234,179,8,0.3);
+    color: var(--accent-yellow);
+    animation: alert-pulse 2.5s infinite;
+}
+.alert-critical {
+    background: linear-gradient(135deg, rgba(239,68,68,0.18), rgba(239,68,68,0.05));
+    border: 1px solid rgba(239,68,68,0.35);
+    color: var(--accent-red);
+    animation: alert-pulse 1.5s infinite;
+}
+@keyframes alert-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.85; }
+}
+
+/* ---- CARDS ---- */
+.card {
+    background: var(--gradient-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    transition: var(--transition);
+    backdrop-filter: blur(8px);
+}
+.card:hover {
+    border-color: var(--border-glow);
+    box-shadow: var(--shadow-glow);
+    transform: translateY(-2px);
+}
+.card-title {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+/* ---- GRID LAYOUTS ---- */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+.grid-6 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+/* ---- HEALTH GAUGE (CSS only) ---- */
+.health-gauge-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+.health-gauge {
+    position: relative;
+    width: 180px;
+    height: 180px;
+}
+.health-gauge svg {
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+}
+.health-gauge .track {
+    fill: none;
+    stroke: rgba(255,255,255,0.06);
+    stroke-width: 12;
+}
+.health-gauge .fill {
+    fill: none;
+    stroke-width: 12;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s ease, stroke 0.5s ease;
+}
+.health-gauge .value {
+    position: absolute;
+    inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+}
+.health-gauge .value .number {
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -1px;
+}
+.health-gauge .value .label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* ---- METRIC CARDS ---- */
+.metric-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+.metric-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+.metric-delta {
+    font-size: 0.7rem;
+    margin-top: 4px;
+    font-weight: 500;
+}
+.metric-delta.up { color: var(--accent-green); }
+.metric-delta.down { color: var(--accent-red); }
+
+/* ---- SENSOR CARDS ---- */
+.sensor-card {
+    background: var(--gradient-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    transition: var(--transition);
+    cursor: default;
+    position: relative;
+    overflow: hidden;
+}
+.sensor-card:hover {
+    border-color: var(--border-glow);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md), var(--shadow-glow);
+}
+.sensor-card .sensor-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+}
+.sensor-card .sensor-name {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+.sensor-card .sensor-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.sensor-card .sensor-unit {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+.sensor-card .sensor-status {
+    position: absolute;
+    top: 12px; right: 12px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+}
+.sensor-card .sparkline-container {
+    height: 50px;
+    margin-top: 8px;
+}
+.sensor-card .sparkline-container canvas {
+    width: 100% !important;
+    height: 50px !important;
+}
+
+/* ---- CHART CONTAINERS ---- */
+.chart-container {
+    position: relative;
+    width: 100%;
+}
+.chart-container canvas {
+    width: 100% !important;
+}
+
+/* ---- FAULT LOCALIZATION BAR ---- */
+.fault-bar {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 8px;
+}
+.fault-bar-label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    width: 130px;
+    text-align: right;
+    flex-shrink: 0;
+}
+.fault-bar-track {
+    flex: 1;
+    height: 22px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+.fault-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease, background 0.4s ease;
+    display: flex; align-items: center;
+    padding-left: 8px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: white;
+    white-space: nowrap;
+}
+.fault-bar-threshold {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent-red);
+    opacity: 0.7;
+}
+
+/* ---- ACTUATOR SECTION ---- */
+.actuator-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+/* ---- DATA SOURCE TABS ---- */
+.source-tabs {
+    display: flex; gap: 4px;
+    background: rgba(0,0,0,0.2);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+}
+.source-tab {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+}
+.source-tab:hover { color: var(--text-primary); }
+.source-tab.active {
+    background: var(--accent-blue);
+    color: white;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+/* ---- SCROLLBAR ---- */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* ---- INFO TEXT ---- */
+.info-text {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.6;
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 1200px) {
+    .grid-3, .grid-6 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 900px) {
+    .app-container { grid-template-columns: 1fr; }
+    .sidebar {
+        position: fixed; left: -300px; z-index: 100;
+        transition: left 0.3s ease;
+        width: 280px;
+    }
+    .sidebar.open { left: 0; }
+    .grid-2, .grid-3, .grid-6 { grid-template-columns: 1fr; }
+}
+
+/* ---- SENSOR TOGGLE CHECKBOXES ---- */
+.sensor-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.sensor-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    user-select: none;
+}
+.sensor-toggle:hover {
+    background: rgba(255,255,255,0.04);
+}
+.sensor-toggle input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border: 2px solid var(--text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    flex-shrink: 0;
+}
+.sensor-toggle input[type="checkbox"]:checked {
+    border-color: var(--accent-blue);
+    background: var(--accent-blue);
+}
+.sensor-toggle input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: -1px; left: 2px;
+    font-size: 11px;
+    color: white;
+    font-weight: 700;
+}
+.sensor-toggle .toggle-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ---- MINI GAUGE IN SENSOR CARDS ---- */
+.sensor-card {
+    cursor: pointer;
+}
+.mini-gauge {
+    position: relative;
+    width: 52px; height: 52px;
+    flex-shrink: 0;
+}
+.mini-gauge svg {
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+}
+.mini-gauge .mini-track {
+    fill: none;
+    stroke: rgba(255,255,255,0.06);
+    stroke-width: 5;
+}
+.mini-gauge .mini-fill {
+    fill: none;
+    stroke-width: 5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s ease, stroke 0.3s ease;
+}
+.mini-gauge .mini-value {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+}
+.sensor-card .sensor-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+.sensor-card .sensor-info {
+    flex: 1;
+    min-width: 0;
+}
+.sensor-card .diagnose-hint {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.sensor-card:hover .diagnose-hint {
+    opacity: 1;
+}
+
+/* ---- LIGHTBOX MODAL ---- */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+    animation: modal-fade-in 0.25s ease;
+}
+.modal-overlay.active {
+    display: flex;
+}
+@keyframes modal-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: 28px;
+    max-width: 800px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: var(--shadow-lg), 0 0 60px rgba(99, 102, 241, 0.1);
+    animation: modal-slide-in 0.3s ease;
+}
+@keyframes modal-slide-in {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.modal-close {
+    position: absolute;
+    top: 16px; right: 20px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.8rem;
+    cursor: pointer;
+    transition: var(--transition);
+    line-height: 1;
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+}
+.modal-close:hover {
+    background: rgba(255,255,255,0.1);
+    color: var(--text-primary);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+.modal-header h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.modal-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+}
+.modal-metric {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    text-align: center;
+}
+.modal-metric .metric-value {
+    font-size: 1.2rem;
+}
+
+.modal-alert {
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-top: 14px;
+}
+.modal-alert.alert-ok {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    color: var(--accent-green);
+}
+.modal-alert.alert-warn {
+    background: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.2);
+    color: var(--accent-yellow);
+}
+.modal-alert.alert-crit {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: var(--accent-red);
+}

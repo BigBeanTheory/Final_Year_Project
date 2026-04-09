@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "author": "Antigravity",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht1", "top": -150, "left": -250, "attrs": {} },
+    { "type": "wokwi-ntc-temperature-sensor", "id": "ntc1", "top": -50, "left": -250, "attrs": {} },
+    { "type": "wokwi-photoresistor-sensor", "id": "ldr1", "top": 50, "left": -250, "attrs": {} },
+    { "type": "wokwi-slide-potentiometer", "id": "pot_sound", "top": 150, "left": -250, "attrs": { "travelLength": "30" } },
+    { "type": "wokwi-slide-potentiometer", "id": "pot_flame", "top": 250, "left": -250, "attrs": { "travelLength": "30" } },
+    { "type": "wokwi-buzzer", "id": "buzzer", "top": -150, "left": 300, "attrs": { "volume": "0.1" } },
+    { "type": "wokwi-rgb-led", "id": "rgb1", "top": -50, "left": 300, "attrs": { "common": "cathode" } },
+    { "type": "wokwi-relay-module", "id": "relay1", "top": 50, "left": 300, "attrs": {} }
+  ],
+  "connections": [
+    [ "uno:3.3V", "pot_sound:VCC", "red", [ "v0" ] ],
+    
+    [ "uno:5V", "dht1:VCC", "red", [ "v0" ] ],
+    [ "uno:5V", "ntc1:VCC", "red", [ "v0" ] ],
+    [ "uno:5V", "ldr1:VCC", "red", [ "v0" ] ],
+    [ "uno:5V", "pot_flame:VCC", "red", [ "v0" ] ],
+    [ "uno:5V", "relay1:VCC", "red", [ "v0" ] ],
+    
+    [ "uno:GND.1", "dht1:GND", "black", [ "v0" ] ],
+    [ "uno:GND.1", "ntc1:GND", "black", [ "v0" ] ],
+    [ "uno:GND.1", "ldr1:GND", "black", [ "v0" ] ],
+    [ "uno:GND.1", "pot_sound:GND", "black", [ "v0" ] ],
+    [ "uno:GND.1", "pot_flame:GND", "black", [ "v0" ] ],
+    [ "uno:GND.2", "buzzer:1", "black", [ "v0" ] ],
+    [ "uno:GND.2", "rgb1:COM", "black", [ "v0" ] ],
+    [ "uno:GND.2", "relay1:GND", "black", [ "v0" ] ],
+    
+    [ "uno:7", "dht1:SDA", "green", [ "v0" ] ],
+    [ "uno:A0", "ntc1:OUT", "orange", [ "v0" ] ],
+    [ "uno:A1", "pot_sound:SIG", "purple", [ "v0" ] ],
+    [ "uno:A2", "ldr1:AO", "yellow", [ "v0" ] ],
+    [ "uno:A3", "pot_flame:SIG", "cyan", [ "v0" ] ],
+    
+    [ "uno:8", "buzzer:2", "purple", [ "v0" ] ],
+    [ "uno:9", "rgb1:R", "red", [ "v0" ] ],
+    [ "uno:10", "rgb1:G", "green", [ "v0" ] ],
+    [ "uno:11", "rgb1:B", "blue", [ "v0" ] ],
+    [ "uno:12", "relay1:IN", "orange", [ "v0" ] ]
+  ]
+}
